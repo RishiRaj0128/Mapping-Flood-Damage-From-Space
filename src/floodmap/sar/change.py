@@ -10,8 +10,12 @@ def compute_log_ratio(pre_db: np.ndarray, post_db: np.ndarray) -> np.ndarray:
 
     In SAR imagery, standing water creates specular reflection away from the radar antenna,
     resulting in significant backscatter drop (delta_dB << 0, typically -2.0 to -6.0 dB or more).
+    Nodata and non-finite pixels remain NaN.
     """
-    return post_db - pre_db
+    valid = np.isfinite(pre_db) & np.isfinite(post_db)
+    diff = np.full_like(pre_db, fill_value=np.nan, dtype=np.float32)
+    diff[valid] = post_db[valid] - pre_db[valid]
+    return diff
 
 
 def compute_adaptive_threshold_otsu(
@@ -93,8 +97,9 @@ def apply_hysteresis_threshold(
         min_cluster_pixels: Minimum contiguous cluster size to suppress isolated noise.
     """
     # Core seeds and relaxed candidates (remember: more negative = stronger flood signal)
-    core_seeds = diff_array <= core_threshold
-    relaxed_candidates = diff_array <= relaxed_threshold
+    finite_mask = np.isfinite(diff_array)
+    core_seeds = finite_mask & (diff_array <= core_threshold)
+    relaxed_candidates = finite_mask & (diff_array <= relaxed_threshold)
 
     # Label connected components of relaxed candidates
     labeled_relaxed, num_features = label(relaxed_candidates)

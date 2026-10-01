@@ -1,5 +1,7 @@
 """Digital Elevation Model (DEM) analysis: Slope, Layover/Shadow, and HAND masks."""
 
+from typing import Any
+
 import numpy as np
 from scipy.ndimage import uniform_filter
 
@@ -85,11 +87,14 @@ def apply_terrain_exclusion(
     max_hand_m: float = 25.0,
     layover_shadow_mask: np.ndarray | None = None,
     return_stats: bool = False,
+    relax_steep_gorge: bool = True,
+    gorge_hand_limit_m: float = 5.0,
+    gorge_max_slope_deg: float = 25.0,
 ) -> tuple[np.ndarray, dict[str, int]] | np.ndarray:
     """Applies strict physical terrain constraints to eliminate mountain false-positives.
 
     Eliminates candidate flood pixels on:
-    1. Slopes steeper than max_slope_deg (standing flood waters cannot persist on steep terrain).
+    1. Slopes steeper than max_slope_deg (relaxed to gorge_max_slope_deg in immediate river gorges where HAND <= 5m).
     2. Vertical elevation far above the drainage channel (HAND > max_hand_m).
     3. Radar layover/shadow distortion zones.
 
@@ -97,15 +102,23 @@ def apply_terrain_exclusion(
         filtered_mask: Boolean mask of physically plausible flood pixels.
         stats (optional): Dictionary of pixel counts eliminated by each specific mask.
     """
-    valid_terrain = (slope <= max_slope_deg) & (hand <= max_hand_m)
+    if relax_steep_gorge:
+        allowed_slope = np.where(hand <= gorge_hand_limit_m, gorge_max_slope_deg, max_slope_deg)
+    else:
+        allowed_slope = max_slope_deg
+
+    valid_slope = slope <= allowed_slope
+    valid_hand = hand <= max_hand_m
+    valid_terrain = valid_slope & valid_hand
+
     if layover_shadow_mask is not None:
         valid_terrain = valid_terrain & (~layover_shadow_mask)
 
     filtered = candidate_mask & valid_terrain
 
     # Compute individual exclusion metrics
-    slope_removed = int(np.count_nonzero(candidate_mask & (slope > max_slope_deg)))
-    hand_removed = int(np.count_nonzero(candidate_mask & (hand > max_hand_m)))
+    slope_removed = int(np.count_nonzero(candidate_mask & (~valid_slope)))
+    hand_removed = int(np.count_nonzero(candidate_mask & (~valid_hand)))
     layover_removed = (
         int(np.count_nonzero(candidate_mask & layover_shadow_mask))
         if layover_shadow_mask is not None
@@ -120,6 +133,11 @@ def apply_terrain_exclusion(
         "removed_by_slope": slope_removed,
         "removed_by_hand": hand_removed,
         "removed_by_layover_shadow": layover_removed,
+        "gorge_relaxed_pixels": (
+            int(np.count_nonzero(candidate_mask & (hand <= gorge_hand_limit_m) & (slope > max_slope_deg) & (slope <= gorge_max_slope_deg)))
+            if relax_steep_gorge
+            else 0
+        ),
     }
 
     logger.info(
@@ -133,3 +151,60 @@ def apply_terrain_exclusion(
     if return_stats:
         return filtered, stats
     return filtered
+
+
+def compute_slope_hand_sensitivity(
+    candidate_mask: np.ndarray,
+    slope: np.ndarray,
+    hand: np.ndarray,
+    pixel_area_km2: float,
+    layover_shadow_mask: np.ndarray | None = None,
+    slope_thresholds: tuple[float, ...] = (5.0, 10.0, 15.0, 20.0),
+    hand_thresholds: tuple[float, ...] = (10.0, 25.0, 50.0),
+    baseline_slope: float = 15.0,
+    baseline_hand: float = 25.0,
+) -> list[dict[str, Any]]:
+    """Generates sensitivity analysis matrix (slope x HAND thresholds vs flooded area).
+
+    Used for evaluation reports to demonstrate parameter robustness and physical impact.
+    """
+    # Compute baseline area
+    baseline_filtered = apply_terrain_exclusion(
+        candidate_mask,
+        slope=slope,
+        hand=hand,
+        max_slope_deg=baseline_slope,
+        max_hand_m=baseline_hand,
+        layover_shadow_mask=layover_shadow_mask,
+        relax_steep_gorge=True,
+    )
+    baseline_area = float(np.count_nonzero(baseline_filtered) * pixel_area_km2)
+
+    results = []
+    for s_thresh in slope_thresholds:
+        for h_thresh in hand_thresholds:
+            filtered = apply_terrain_exclusion(
+                candidate_mask,
+                slope=slope,
+                hand=hand,
+                max_slope_deg=s_thresh,
+                max_hand_m=h_thresh,
+                layover_shadow_mask=layover_shadow_mask,
+                relax_steep_gorge=True,
+            )
+            retained = int(np.count_nonzero(filtered))
+            area_km2 = float(retained * pixel_area_km2)
+            pct_diff = (
+                ((area_km2 - baseline_area) / baseline_area * 100.0)
+                if baseline_area > 0
+                else 0.0
+            )
+
+            results.append({
+                "slope_deg": s_thresh,
+                "hand_m": h_thresh,
+                "retained_pixels": retained,
+                "flooded_area_km2": round(area_km2, 4),
+                "pct_change_vs_baseline": round(pct_diff, 2),
+            })
+    return results

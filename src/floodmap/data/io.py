@@ -62,12 +62,22 @@ class DataLoader:
         validate_input_dataset("sentinel-2")
         validate_input_dataset("copernicus-dem")
         validate_input_dataset("osm-pre-event")
-        valid_osm_dt = validate_osm_timestamp(osm_snapshot_date)
-
         clean_date_str = event_date_str.replace("Z", "+00:00")
         if "T" not in clean_date_str:
             clean_date_str = f"{clean_date_str}T00:00:00+00:00"
         event_dt = datetime.fromisoformat(clean_date_str)
+
+        # Pre-event snapshot rule: min(event_date - 1 day, 2026-07-27)
+        from datetime import timedelta
+        one_day_before = event_dt - timedelta(days=1)
+        cutoff_dt = datetime.fromisoformat("2026-07-27T00:00:00+00:00")
+        requested_dt = (
+            datetime.fromisoformat(osm_snapshot_date.replace("Z", "+00:00"))
+            if osm_snapshot_date
+            else cutoff_dt
+        )
+        effective_osm_dt = min(one_day_before, requested_dt, cutoff_dt)
+        valid_osm_dt = validate_osm_timestamp(effective_osm_dt)
 
         start_dt = event_dt.fromtimestamp(
             event_dt.timestamp() - (search_window_days * 86400), tz=UTC

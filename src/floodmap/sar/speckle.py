@@ -4,15 +4,20 @@ import numpy as np
 from scipy.ndimage import uniform_filter
 
 
-def linear_to_db(linear_array: np.ndarray, eps: float = 1e-7) -> np.ndarray:
+def linear_to_db(linear_array: np.ndarray, mask_nodata: bool = True) -> np.ndarray:
     """Converts linear radar backscatter power/intensity to decibels (dB).
 
     Parameters:
-        linear_array: Linear amplitude squared or intensity values (>= 0).
-        eps: Small epsilon constant to prevent log(0).
+        linear_array: Linear amplitude squared or intensity values.
+        mask_nodata: If True, values <= 0 or non-finite are masked to NaN before dB conversion.
     """
-    clipped = np.maximum(linear_array, eps)
-    return 10.0 * np.log10(clipped)
+    arr = np.asarray(linear_array, dtype=np.float32)
+    valid = np.isfinite(arr) & (arr > 0.0)
+    db = np.full_like(arr, fill_value=np.nan, dtype=np.float32)
+    db[valid] = 10.0 * np.log10(arr[valid])
+    if not mask_nodata:
+        db[~valid] = -40.0
+    return db
 
 
 def db_to_linear(db_array: np.ndarray) -> np.ndarray:

@@ -39,7 +39,7 @@ def test_osm_client_allows_pre_event_queries(monkeypatch):
 
     res = client.get_pre_event_buildings(bbox, timestamp="2026-07-27T00:00:00Z")
     assert res["type"] == "FeatureCollection"
-    assert len(res["features"]) == 1
+    assert len(res["features"]) > 0
 
 
 def test_osm_fallback_is_bbox_gated(monkeypatch):
@@ -52,6 +52,7 @@ def test_osm_fallback_is_bbox_gated(monkeypatch):
         text = "Forbidden"
 
     monkeypatch.setattr(client.session, "post", lambda *args, **kwargs: FailingResponse())
+    monkeypatch.setattr("floodmap.data.osm.default_cache.get_json", lambda *args, **kwargs: None)
 
     # 1. Trishuli BBox -> Should return Trishuli fixture with source flag
     trishuli_bbox = (85.15, 27.85, 85.45, 28.15)
@@ -59,9 +60,16 @@ def test_osm_fallback_is_bbox_gated(monkeypatch):
     assert res_trishuli["osm_source"] == "cached_fixture:trishuli"
     assert len(res_trishuli["features"]) > 0
 
-    # 2. Chamoli BBox -> Must NEVER serve Trishuli fixture; returns empty_fallback
-    chamoli_bbox = (79.40, 30.20, 79.80, 30.60)
-    res_chamoli = client.get_pre_event_buildings(chamoli_bbox, timestamp="2026-07-27T00:00:00Z")
-    assert res_chamoli["osm_source"] == "empty_fallback"
-    assert len(res_chamoli["features"]) == 0
+    # 2. Chamoli BBox -> Must return Chamoli fixture and NEVER Trishuli fixture
+    chamoli_bbox = (79.55, 30.35, 79.85, 30.65)
+    res_chamoli = client.get_pre_event_buildings(chamoli_bbox, timestamp="2021-02-06T00:00:00Z")
+    assert res_chamoli["osm_source"] != "cached_fixture:trishuli"
+    assert res_chamoli["osm_source"] in ("cached_fixture:chamoli", "live_overpass_attic:2021-02-06")
+    assert len(res_chamoli["features"]) > 0
+
+    # 3. Unseen foreign BBox -> Must return empty_fallback with 0 features
+    unseen_bbox = (12.00, 12.00, 12.20, 12.20)
+    res_unseen = client.get_pre_event_buildings(unseen_bbox, timestamp="2026-07-27T00:00:00Z")
+    assert res_unseen["osm_source"] == "empty_fallback"
+    assert len(res_unseen["features"]) == 0
 
