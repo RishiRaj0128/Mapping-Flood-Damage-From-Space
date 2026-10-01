@@ -41,6 +41,16 @@ class Settings(BaseModel):
     default_bbox: tuple[float, float, float, float] = (85.15, 27.85, 85.45, 28.15)
     default_event_date: str = "2026-08-26"
 
+    # Configurable physical terrain thresholds
+    max_slope_deg: float = Field(
+        default=15.0,
+        description="Maximum slope in degrees for standing flood water candidate pixels.",
+    )
+    max_hand_m: float = Field(
+        default=25.0,
+        description="Maximum Height Above Nearest Drainage (HAND) in meters for flood candidate pixels.",
+    )
+
     # Legal Attributions
     attributions: list[str] = [
         "Contains modified Copernicus Sentinel data 2026.",

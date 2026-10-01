@@ -84,20 +84,52 @@ def apply_terrain_exclusion(
     max_slope_deg: float = 15.0,
     max_hand_m: float = 25.0,
     layover_shadow_mask: np.ndarray | None = None,
-) -> np.ndarray:
+    return_stats: bool = False,
+) -> tuple[np.ndarray, dict[str, int]] | np.ndarray:
     """Applies strict physical terrain constraints to eliminate mountain false-positives.
 
     Eliminates candidate flood pixels on:
     1. Slopes steeper than max_slope_deg (standing flood waters cannot persist on steep terrain).
     2. Vertical elevation far above the drainage channel (HAND > max_hand_m).
     3. Radar layover/shadow distortion zones.
+
+    Returns:
+        filtered_mask: Boolean mask of physically plausible flood pixels.
+        stats (optional): Dictionary of pixel counts eliminated by each specific mask.
     """
     valid_terrain = (slope <= max_slope_deg) & (hand <= max_hand_m)
     if layover_shadow_mask is not None:
         valid_terrain = valid_terrain & (~layover_shadow_mask)
 
     filtered = candidate_mask & valid_terrain
-    suppressed_count = np.count_nonzero(candidate_mask) - np.count_nonzero(filtered)
-    if suppressed_count > 0:
-        logger.debug(f"Terrain exclusion eliminated {suppressed_count} false-positive pixels.")
+
+    # Compute individual exclusion metrics
+    slope_removed = int(np.count_nonzero(candidate_mask & (slope > max_slope_deg)))
+    hand_removed = int(np.count_nonzero(candidate_mask & (hand > max_hand_m)))
+    layover_removed = (
+        int(np.count_nonzero(candidate_mask & layover_shadow_mask))
+        if layover_shadow_mask is not None
+        else 0
+    )
+    total_removed = int(np.count_nonzero(candidate_mask) - np.count_nonzero(filtered))
+
+    stats = {
+        "candidate_pixels": int(np.count_nonzero(candidate_mask)),
+        "retained_pixels": int(np.count_nonzero(filtered)),
+        "total_removed": total_removed,
+        "removed_by_slope": slope_removed,
+        "removed_by_hand": hand_removed,
+        "removed_by_layover_shadow": layover_removed,
+    }
+
+    logger.info(
+        f"Terrain Exclusion Summary | Evaluated: {stats['candidate_pixels']} | "
+        f"Removed by Slope (> {max_slope_deg} deg): {slope_removed} | "
+        f"Removed by HAND (> {max_hand_m} m): {hand_removed} | "
+        f"Removed by Layover/Shadow: {layover_removed} | "
+        f"Retained: {stats['retained_pixels']}"
+    )
+
+    if return_stats:
+        return filtered, stats
     return filtered

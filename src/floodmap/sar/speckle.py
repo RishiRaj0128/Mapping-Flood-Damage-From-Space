@@ -20,13 +20,13 @@ def db_to_linear(db_array: np.ndarray) -> np.ndarray:
     return 10.0 ** (db_array / 10.0)
 
 
-def enhanced_lee_filter(
+def lee_filter(
     image: np.ndarray,
     window_size: int = 5,
     num_looks: float = 1.0,
     damping_factor: float = 1.0,
 ) -> np.ndarray:
-    """Enhanced Lee speckle filter for SAR imagery in linear or decibel domain.
+    """Standard Lee speckle filter for SAR imagery in linear or decibel domain.
 
     Adapts filtering weights between pure averaging in homogeneous regions
     and edge preservation in heterogeneous/point target regions.
@@ -68,3 +68,7 @@ def enhanced_lee_filter(
     # Filtered estimate: R_hat = mean + W * (I - mean)
     filtered = local_mean + weights * (safe_img - local_mean)
     return np.where(valid_mask, filtered, image)
+
+
+# Backward-compatible alias
+enhanced_lee_filter = lee_filter

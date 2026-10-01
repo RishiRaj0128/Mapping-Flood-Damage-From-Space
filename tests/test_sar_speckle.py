@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from floodmap.sar.speckle import db_to_linear, enhanced_lee_filter, linear_to_db
+from floodmap.sar.speckle import db_to_linear, enhanced_lee_filter, lee_filter, linear_to_db
 
 
 def test_linear_to_db_and_db_to_linear():
@@ -17,7 +17,7 @@ def test_linear_to_db_and_db_to_linear():
     np.testing.assert_allclose(recovered, linear, rtol=1e-4)
 
 
-def test_enhanced_lee_filter():
+def test_lee_filter():
     """Lee filter must reduce variance in homogeneous areas while preserving edges."""
     rng = np.random.default_rng(42)
     # 50x50 image with a sharp edge: left side is 1.0, right side is 10.0
@@ -28,7 +28,9 @@ def test_enhanced_lee_filter():
     noise = rng.gamma(shape=1.0, scale=1.0, size=(50, 50))
     noisy = img * noise
 
-    filtered = enhanced_lee_filter(noisy, window_size=5, num_looks=1.0)
+    filtered = lee_filter(noisy, window_size=5, num_looks=1.0)
+    # Verify backward compatible alias
+    assert enhanced_lee_filter == lee_filter
 
     # In homogeneous left patch, filtered variance should be strictly less than noisy variance
     noisy_var = np.var(noisy[:, :20])
