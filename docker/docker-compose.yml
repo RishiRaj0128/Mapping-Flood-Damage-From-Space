@@ -1,0 +1,14 @@
+services:
+  floodmap:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    volumes:
+      - ../outputs:/app/outputs
+      - ../data_cache:/app/data_cache
+    environment:
+      - CDSE_CLIENT_ID=${CDSE_CLIENT_ID:-}
+      - CDSE_CLIENT_SECRET=${CDSE_CLIENT_SECRET:-}
+      - PLANETARY_COMPUTER_KEY=${PLANETARY_COMPUTER_KEY:-}
+      - DATA_CACHE_DIR=/app/data_cache
+    command: ["pytest", "tests/"]

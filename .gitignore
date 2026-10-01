@@ -1,0 +1,40 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+env/
+venv/
+ENV/
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+
+# Pytest / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Cache directories
+.cache/
+data_cache/
+
+# Local configuration & environment variables
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+
+# Large binaries / GeoTIFFs / artifacts
+*.tif
+*.tiff
+*.nc
+*.zip
+*.tar.gz
+outputs/runs/
