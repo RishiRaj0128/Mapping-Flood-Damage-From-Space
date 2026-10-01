@@ -15,6 +15,20 @@ logger = get_logger("floodmap.data.osm")
 OSM_ATTRIBUTION = "(c) OpenStreetMap contributors."
 
 
+def is_trishuli_bbox_match(
+    bbox: tuple[float, float, float, float],
+    tolerance: float = 0.15,
+) -> bool:
+    """Checks whether the requested bbox corresponds to the Trishuli case study AOI."""
+    trishuli_bbox = settings.default_bbox
+    return (
+        abs(bbox[0] - trishuli_bbox[0]) <= tolerance
+        and abs(bbox[1] - trishuli_bbox[1]) <= tolerance
+        and abs(bbox[2] - trishuli_bbox[2]) <= tolerance
+        and abs(bbox[3] - trishuli_bbox[3]) <= tolerance
+    )
+
+
 class OhsomeOSMClient:
     """Queries pre-event OpenStreetMap snapshots via the HeiGIT ohsome API.
 
@@ -54,7 +68,11 @@ class OhsomeOSMClient:
 
         cached = default_cache.get_json("osm_query", cache_params)
         if cached is not None:
-            logger.info(f"Loaded OSM geometries for '{filter_expr}' from cache.")
+            if "osm_source" not in cached:
+                cached["osm_source"] = (
+                    "cached_fixture:trishuli" if is_trishuli_bbox_match(bbox) else "cached_osm"
+                )
+            logger.info(f"Loaded OSM geometries for '{filter_expr}' from cache (source: {cached.get('osm_source')}).")
             return cached
 
         # ohsome /elements/geometry endpoint
@@ -78,7 +96,8 @@ class OhsomeOSMClient:
             if resp.status_code == 200:
                 geojson = resp.json()
                 features_count = len(geojson.get("features", []))
-                logger.info(f"Retrieved {features_count} OSM elements from ohsome.")
+                geojson["osm_source"] = "live_ohsome_api"
+                logger.info(f"Retrieved {features_count} OSM elements from ohsome (source: live_ohsome_api).")
                 default_cache.put_json("osm_query", cache_params, geojson)
                 return geojson
             else:
@@ -86,11 +105,20 @@ class OhsomeOSMClient:
                     f"ohsome API returned status {resp.status_code}: {resp.text[:200]}"
                 )
         except Exception as exc:
-            logger.warning(f"ohsome query failed: {exc}. Trying offline sample fallback...")
+            logger.warning(f"ohsome query failed: {exc}. Evaluating fallback options...")
 
-        # Check for local sample fallback (e.g. for demo or offline judging)
+        # Strict bbox gate: only serve Trishuli fixture if bbox matches Trishuli case study
+        # Default Trishuli bbox: (85.15, 27.85, 85.45, 28.15)
+        trishuli_bbox = settings.default_bbox
+        is_trishuli_match = (
+            abs(bbox[0] - trishuli_bbox[0]) <= 0.15
+            and abs(bbox[1] - trishuli_bbox[1]) <= 0.15
+            and abs(bbox[2] - trishuli_bbox[2]) <= 0.15
+            and abs(bbox[3] - trishuli_bbox[3]) <= 0.15
+        )
+
         sample_path = settings.output_dir / "samples" / "trishuli_pre_event_osm.json"
-        if sample_path.exists():
+        if is_trishuli_match and sample_path.exists():
             try:
                 import json
                 with open(sample_path, encoding="utf-8") as f:
@@ -110,18 +138,28 @@ class OhsomeOSMClient:
                 else:
                     filtered = features
 
-                logger.info(f"Loaded {len(filtered)} features matching '{filter_expr}' from offline sample fallback.")
+                logger.warning(
+                    f"OSM source: cached fixture (Trishuli area match). "
+                    f"Loaded {len(filtered)} features matching '{filter_expr}'."
+                )
                 return {
                     "type": "FeatureCollection",
+                    "osm_source": "cached_fixture:trishuli",
                     "features": filtered,
                     "attribution": OSM_ATTRIBUTION,
                 }
             except Exception as e:
                 logger.warning(f"Failed to read sample fallback: {e}")
+        elif not is_trishuli_match:
+            logger.warning(
+                f"OSM query failed for unseen bbox {bbox}. Strict compliance forbids "
+                f"serving Trishuli fixture for an unmatching area. Returning empty OSM layer."
+            )
 
-        # Fallback empty FeatureCollection if API is unreachable and no sample found
+        # Fallback empty FeatureCollection if API is unreachable and no valid fixture matches
         empty_fc: dict[str, Any] = {
             "type": "FeatureCollection",
+            "osm_source": "empty_fallback",
             "features": [],
             "attribution": OSM_ATTRIBUTION,
         }

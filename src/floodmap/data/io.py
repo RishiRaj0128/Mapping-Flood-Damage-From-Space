@@ -30,6 +30,7 @@ class DatasetBundle:
     osm_settlements: dict[str, Any]
     osm_hospitals: dict[str, Any]
     is_cloud_compromised: bool
+    osm_source: str = "unknown"
 
 
 class DataLoader:
@@ -86,7 +87,7 @@ class DataLoader:
             catalog_preference="cdse",
         )
         s1_candidates = [S1SceneMetadata.from_stac_item(item) for item in s1_items]
-        s1_pair = select_best_s1_pair(s1_candidates, event_dt)
+        s1_pair = select_best_s1_pair(s1_candidates, event_dt, aoi_bbox=bbox)
 
         # 2. Search Sentinel-2
         s2_items = self.stac.search_items(
@@ -109,6 +110,7 @@ class DataLoader:
         osm_hospitals = self.osm.get_pre_event_hospitals(bbox, timestamp=valid_osm_dt)
 
         is_cloudy = s2_pair.is_cloud_compromised if s2_pair else True
+        detected_osm_source = osm_buildings.get("osm_source") or osm_roads.get("osm_source") or "unknown"
 
         return DatasetBundle(
             bbox=bbox,
@@ -122,4 +124,5 @@ class DataLoader:
             osm_settlements=osm_settlements,
             osm_hospitals=osm_hospitals,
             is_cloud_compromised=is_cloudy,
+            osm_source=detected_osm_source,
         )

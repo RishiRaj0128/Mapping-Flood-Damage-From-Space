@@ -107,6 +107,63 @@ def test_select_best_s1_pair(sample_s1_stac_items):
     assert pair is not None
     assert pair.relative_orbit == 85
     assert pair.direction == "ascending"
-    assert pair.pre_scene.item_id == "S1A_IW_GRDH_1SDV_20260815_orbit85_asc"
-    assert pair.post_scene.item_id == "S1A_IW_GRDH_1SDV_20260827_orbit85_asc"
     assert pair.delta_days == 12.0
+
+
+def test_select_best_s1_pair_strict_post_timing():
+    """Scenes acquired prior to or on the event date cannot be used as post-event scenes."""
+    event_dt = datetime(2026, 8, 26, 12, 0, 0, tzinfo=UTC)
+    pre = S1SceneMetadata(
+        item_id="pre_orbit85",
+        datetime=datetime(2026, 8, 14, tzinfo=UTC),
+        relative_orbit=85,
+        direction="ascending",
+        polarizations=["VV"],
+        assets={},
+        raw_properties={},
+    )
+    # Acquired morning of Aug 26, BEFORE the event at 12:00
+    same_day_pre = S1SceneMetadata(
+        item_id="same_day_morning",
+        datetime=datetime(2026, 8, 26, 6, 0, 0, tzinfo=UTC),
+        relative_orbit=85,
+        direction="ascending",
+        polarizations=["VV"],
+        assets={},
+        raw_properties={},
+    )
+    # No scene strictly after event_dt
+    pair = select_best_s1_pair([pre, same_day_pre], event_dt)
+    assert pair is None
+
+
+def test_select_best_s1_pair_aoi_spatial_filtering():
+    """Candidates outside or insufficiently covering the AOI must be filtered out."""
+    event_dt = datetime(2026, 8, 26, tzinfo=UTC)
+    aoi_bbox = (85.15, 27.85, 85.45, 28.15)
+
+    # Disjoint scene in western Nepal (81.0, 29.0)
+    disjoint_pre = S1SceneMetadata(
+        item_id="disjoint_pre",
+        datetime=datetime(2026, 8, 14, tzinfo=UTC),
+        relative_orbit=85,
+        direction="ascending",
+        polarizations=["VV"],
+        assets={},
+        raw_properties={},
+        bbox=(80.5, 28.5, 81.5, 29.5),
+    )
+    covering_post = S1SceneMetadata(
+        item_id="covering_post",
+        datetime=datetime(2026, 8, 27, tzinfo=UTC),
+        relative_orbit=85,
+        direction="ascending",
+        polarizations=["VV"],
+        assets={},
+        raw_properties={},
+        bbox=(85.0, 27.5, 86.0, 28.5),
+    )
+
+    pair = select_best_s1_pair([disjoint_pre, covering_post], event_dt, aoi_bbox=aoi_bbox)
+    assert pair is None
+

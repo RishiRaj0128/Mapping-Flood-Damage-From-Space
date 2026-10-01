@@ -60,7 +60,7 @@ The pipeline strictly enforces regulatory and competition invariants in code and
 | **Copernicus GLO-30 DEM Discovery** | **VERIFIED** | Verified tile bounds resolution via Planetary Computer and AWS Open Data. |
 | **OSM Time Enforcement (`<= 2026-07-27`)** | **VERIFIED** | Code-enforced cutoff prevents data leakage. Includes fallback fixtures in `outputs/samples/` if public ohsome API rate-limits or blocks. |
 | **Import-Guard Isolation** | **VERIFIED** | AST unit test verifies zero references to `evaluation/` from `src/`. |
-| **August 2026 Trishuli Flood Ground Truth** | **ASSUMED** | Model reference benchmarks emulate the August 2026 Bhote Koshi / Trishuli event matching CEMS EMSR927 activation characteristics. |
+| **August 2026 Trishuli Flood Reference** | **ASSUMED** | No EMSR927 data is used anywhere in the pipeline. Case-study comparison happens only in evaluation/, after the run. |
 
 ---
 
