@@ -45,6 +45,27 @@ def build_parser() -> argparse.ArgumentParser:
         help="Event date YYYY-MM-DD",
     )
 
+    # Run command
+    run_parser = subparsers.add_parser("run", help="Run end-to-end flood mapping pipeline")
+    run_parser.add_argument(
+        "--bbox",
+        type=str,
+        required=True,
+        help="Bounding box min_lon,min_lat,max_lon,max_lat",
+    )
+    run_parser.add_argument(
+        "--date",
+        type=str,
+        required=True,
+        help="Event date YYYY-MM-DD",
+    )
+    run_parser.add_argument(
+        "--output-dir",
+        type=str,
+        default=None,
+        help="Custom output directory",
+    )
+
     return parser
 
 
@@ -58,10 +79,25 @@ def parse_bbox_str(bbox_str: str):
 def main():
     parser = build_parser()
     args = parser.parse_args()
+    bbox = parse_bbox_str(args.bbox)
 
-    if args.command in ("demo", "ingest"):
-        bbox = parse_bbox_str(args.bbox)
-        logger.info(f"Executing {args.command} for bbox={bbox} on date={args.date}")
+    if args.command in ("demo", "run"):
+        from floodmap.pipeline import run
+        output_dir = getattr(args, "output_dir", None)
+        result = run(bbox=bbox, event_date=args.date, output_dir=output_dir)
+        print("\n================ PIPELINE RESULT ================")
+        print(f"AOI: {result.bbox}")
+        print(f"Event Date: {result.event_date}")
+        print(f"Flooded Area: {result.flooded_area_km2} km²")
+        print(f"Debris Flow Area: {result.debris_area_km2} km²")
+        print(f"Mean Flood Confidence: {result.mean_confidence:.2f}")
+        print(f"OSM Source: {result.osm_source}")
+        print(f"COGs Generated in: {result.output_dir / 'rasters'}")
+        print(f"Facts File: {result.output_dir / 'facts.json'}")
+        print("=================================================\n")
+
+    elif args.command == "ingest":
+        logger.info(f"Executing ingest for bbox={bbox} on date={args.date}")
         loader = DataLoader()
         bundle = loader.load_dataset_bundle(bbox=bbox, event_date_str=args.date)
 

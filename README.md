@@ -55,10 +55,13 @@ The pipeline strictly enforces regulatory and competition invariants in code and
 
 | Component | Status | Details |
 | :--- | :--- | :--- |
-| **Sentinel-1 STAC Search & Orbit Pairing** | **VERIFIED** | Live query verified against Planetary Computer STAC. Correctly discovered orbit 19 descending 12-day pair for Trishuli case. |
-| **Sentinel-2 Cloud Scoring & Degradation** | **VERIFIED** | Verified live STAC retrieval. Correctly identified 54.3% cloud cover on post-event scene and triggered graceful S1-dominant fallback. |
-| **Copernicus GLO-30 DEM Discovery** | **VERIFIED** | Verified tile bounds resolution via Planetary Computer and AWS Open Data. |
-| **OSM Time Enforcement (`<= 2026-07-27`)** | **VERIFIED** | Code-enforced cutoff prevents data leakage. Includes fallback fixtures in `outputs/samples/` if public ohsome API rate-limits or blocks. |
+| **Sentinel-1 STAC Search & Orbit Pairing** | **VERIFIED** | Live query verified against Planetary Computer STAC. Correctly discovered orbit 19 descending 12-day pair for Trishuli case, and orbit 129 ascending for Chamoli 2021. Enforces strict post > event timing and AOI spatial overlap. |
+| **Sentinel-2 SCL Cloud Scoring** | **VERIFIED** | SCL band inspected for exact AOI cloud/shadow fraction (classes 3, 8, 9, 10), preventing false scene-level degradation. |
+| **Copernicus GLO-30 DEM & HAND** | **VERIFIED** | Elevation slope, layover/shadow, and HAND computed via pyflwdir to eliminate steep-slope false positives. |
+| **SAR Lee Filter & Otsu Hysteresis** | **VERIFIED** | Enhanced Lee speckle filtering, decibel log-ratio change detection, and adaptive dual-threshold hysteresis segmentation. |
+| **Multi-Sensor Fusion & Confidence** | **VERIFIED** | Fuses S1 SAR with S2 MNDWI water and NDVI drop / SWIR rise debris flow under SCL cloud mask, producing a per-pixel continuous confidence raster. |
+| **COG Export & Auditable Facts** | **VERIFIED** | Exports 6 Cloud-Optimized GeoTIFF rasters and structured `facts.json` per run. |
+| **BBox-Gated OSM Fallback** | **VERIFIED** | Historical OSM snapshot (<= 2026-07-27). Trishuli cached fixture is strictly bbox-gated and never served for unseen areas (e.g. Chamoli correctly uses empty_fallback). |
 | **Import-Guard Isolation** | **VERIFIED** | AST unit test verifies zero references to `evaluation/` from `src/`. |
 | **August 2026 Trishuli Flood Reference** | **ASSUMED** | No EMSR927 data is used anywhere in the pipeline. Case-study comparison happens only in evaluation/, after the run. |
 
